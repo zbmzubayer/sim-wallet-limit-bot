@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model BotUser {
+  id               Int      @id @default(autoincrement())
+  telegramUsername String   @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Chat {
+  id             Int      @id @default(autoincrement())
+  telegramChatId String   @unique
+  title          String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  devices Device[]
+}
+
+model Device {
+  id        Int      @id @default(autoincrement())
+  deviceNo  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  chatId    Int
+
+  chat       Chat        @relation(fields: [chatId], references: [id])
+  deviceSims DeviceSim[]
+}
+
+model Sim {
+  id            Int      @id @default(autoincrement())
+  simNo         Int
+  phone         String   @unique
+  bkBalance     Int      @default(0)
+  ngBalance     Int      @default(0)
+  bkDailyLimit  Int
+  ngDailyLimit  Int
+  bkMonthlyUsed Int
+  ngMonthlyUsed Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  simTransactionHistories SimTransactionHistory[]
+  deviceSims              DeviceSim[]
+}
+
+model DeviceSim {
+  id       Int @id @default(autoincrement())
+  deviceId Int
+  simId    Int
+
+  device Device @relation(fields: [deviceId], references: [id])
+  sim    Sim    @relation(fields: [simId], references: [id])
+
+  @@unique([deviceId, simId])
+  @@index([deviceId])
+  @@index([simId])
+}
+
+model SimTransactionHistory {
+  id        Int      @id @default(autoincrement())
+  operation String
+  type      String // IN or OUT
+  amount    Float
+  charge    Float
+  note      String?
+  createdAt DateTime @default(now())
+  simId     Int
+
+  sim Sim @relation(fields: [simId], references: [id])
+}
