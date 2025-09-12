@@ -17,3 +17,12 @@ export const chatSchema = z.object({
 });
 
 export type ChatDto = z.infer<typeof chatSchema>;
+
+export const balanceUpdateSchema = z.object({
+  deviceNo: z.int(),
+  simNo: z.int(),
+  amount: z.number(),
+  walletType: z.string(),
+});
+
+export type BalanceUpdateDto = z.infer<typeof balanceUpdateSchema>;

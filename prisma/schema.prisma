@@ -27,25 +27,24 @@ model Chat {
 
 model Device {
   id        Int      @id @default(autoincrement())
-  deviceNo  String
+  deviceNo  Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   chatId    Int
 
-  chat       Chat        @relation(fields: [chatId], references: [id])
+  chat       Chat        @relation(fields: [chatId], references: [id], onDelete: Cascade)
   deviceSims DeviceSim[]
 }
 
 model Sim {
   id            Int      @id @default(autoincrement())
-  simNo         Int
   phone         String   @unique
-  bkBalance     Int      @default(0)
-  ngBalance     Int      @default(0)
-  bkDailyLimit  Int
-  ngDailyLimit  Int
-  bkMonthlyUsed Int
-  ngMonthlyUsed Int
+  bkBalance     Float    @default(0)
+  ngBalance     Float    @default(0)
+  bkLimit       Float
+  ngLimit       Float
+  bkMonthlyUsed Float
+  ngMonthlyUsed Float
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -55,11 +54,12 @@ model Sim {
 
 model DeviceSim {
   id       Int @id @default(autoincrement())
+  simNo    Int
   deviceId Int
   simId    Int
 
-  device Device @relation(fields: [deviceId], references: [id])
-  sim    Sim    @relation(fields: [simId], references: [id])
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  sim    Sim    @relation(fields: [simId], references: [id], onDelete: Cascade)
 
   @@unique([deviceId, simId])
   @@index([deviceId])

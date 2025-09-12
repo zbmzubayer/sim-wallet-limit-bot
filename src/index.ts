@@ -5,8 +5,6 @@ import { botCommand } from "./bot-command";
 import { connectDB } from "./lib/db";
 import { initAuthBotUserCache } from "./services/auth.service";
 
-import "./services/cron.service";
-
 async function bootstrap() {
   await connectDB();
   await initAuthBotUserCache();
