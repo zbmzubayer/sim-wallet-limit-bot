@@ -28,16 +28,22 @@ export function botCommand(bot: Bot) {
     const deviceData = parseDeviceSet(ctx.match.trim());
     if (deviceData) {
       const telegramChatId = ctx.chat.id.toString();
-
-      await createChatWithDeviceSims({
-        telegramChatId,
-        title: ctx.chat.title || "",
-        deviceNo: deviceData.deviceNo,
-        sims: deviceData.sims,
-      });
-      return ctx.reply("✅ Wallets have been set for this chat.", {
-        reply_parameters: { message_id: ctx.message?.message_id! },
-      });
+      try {
+        await createChatWithDeviceSims({
+          telegramChatId,
+          title: ctx.chat.title || "",
+          deviceNo: deviceData.deviceNo,
+          sims: deviceData.sims,
+        });
+        return ctx.reply("✅ Wallets have been set for this chat.", {
+          reply_parameters: { message_id: ctx.message?.message_id! },
+        });
+      } catch (error) {
+        console.error("Error setting wallets:", error);
+        return ctx.reply("❌ Failed to set wallets for this chat.", {
+          reply_parameters: { message_id: ctx.message?.message_id! },
+        });
+      }
     } else {
       return ctx.reply(
         `❌ Invalid wallet setup format. Please use the format below:
@@ -68,7 +74,7 @@ Sim4 - 01000000004 BK 80K | NG 50K
       });
     } catch (error) {
       console.error("Error resetting wallets:", error);
-      return ctx.reply("❌ Failed to reset wallets for this chat.", {
+      return ctx.reply("❌ No wallets found for this chat.", {
         reply_parameters: { message_id: ctx.message?.message_id! },
       });
     }
@@ -125,7 +131,12 @@ Sim4 - 01000000004 BK 80K | NG 50K
         reply_parameters: { message_id: ctx.message?.message_id! },
       });
     } catch (error) {
-      console.error("Error undoing transaction:", error);
+      console.error("Error updating balance:", error);
+      if (error instanceof Error && error.cause === "NOT_FOUND") {
+        return ctx.reply("❌ No wallets found for this chat.", {
+          reply_parameters: { message_id: ctx.message?.message_id! },
+        });
+      }
       return ctx.reply("❌ Failed to undo the last transaction.", {
         reply_parameters: { message_id: ctx.message?.message_id! },
       });
@@ -180,11 +191,11 @@ Sim4 - 01000000004 BK 80K | NG 50K
     const match = ctx.message.text.match(regex);
 
     if (!match)
-      return ctx.reply("❌ Invalid format. E.g., +30000 ds-1 sim1 bk", {
+      return ctx.reply("❌ Invalid format. Use: +30000 ds-1 sim1 bk", {
         reply_parameters: { message_id: ctx.message?.message_id! },
       });
     if (!match[1] || !match[2] || !match[3] || !match[4]) {
-      return ctx.reply("❌ Invalid format. E.g., +30000 ds-1 sim1 bk", {
+      return ctx.reply("❌ Invalid format. Use: +30000 ds-1 sim1 bk", {
         reply_parameters: { message_id: ctx.message?.message_id! },
       });
     }
@@ -213,33 +224,38 @@ Sim4 - 01000000004 BK 80K | NG 50K
       });
     } catch (error) {
       console.error("Error updating balance:", error);
+      if (error instanceof Error && error.cause === "NOT_FOUND") {
+        return ctx.reply("❌ No wallets found for this chat.", {
+          reply_parameters: { message_id: ctx.message?.message_id! },
+        });
+      }
       return ctx.reply(`❌ Failed to update balance`, {
         reply_parameters: { message_id: ctx.message?.message_id! },
       });
     }
   });
 
-  const text = `DS-1
+  //   const text = `DS-1
 
-Sim1 - 01832553404 BK 80K | NG 1K
-Sim2 - 01832553404 BK 80K | NG 1K
-Sim3 - 01832553404 BK 80K | NG 1K
-`.trim();
-  console.log(parseDeviceSet(text));
+  // Sim1 - 01832553404 BK 80K | NG 1K
+  // Sim2 - 01832553404 BK 80K | NG 1K
+  // Sim3 - 01832553404 BK 80K | NG 1K
+  // `.trim();
+  //   console.log(parseDeviceSet(text));
 
-  const messsage = "-30000 ds-14 sim4 ng";
-  const regex = /^([+-]\d+)\s+ds-(\d+)\s+sim([1-4])\s+(bk|ng)$/i;
-  const match = messsage.match(regex);
-  if (match) {
-    const amount = Number(match[1]);
-    const deviceNo = match[2];
-    const simNo = match[3];
-    const walletType = match[4]?.toLowerCase();
-    console.log("Amount:", amount);
-    console.log("Device No:", deviceNo);
-    console.log("Sim No:", simNo);
-    console.log("Wallet Type:", walletType);
-  } else {
-    console.log("No match found.");
-  }
+  //   const messsage = "-30000 ds-14 sim4 ng";
+  //   const regex = /^([+-]\d+)\s+ds-(\d+)\s+sim([1-4])\s+(bk|ng)$/i;
+  //   const match = messsage.match(regex);
+  //   if (match) {
+  //     const amount = Number(match[1]);
+  //     const deviceNo = match[2];
+  //     const simNo = match[3];
+  //     const walletType = match[4]?.toLowerCase();
+  //     console.log("Amount:", amount);
+  //     console.log("Device No:", deviceNo);
+  //     console.log("Sim No:", simNo);
+  //     console.log("Wallet Type:", walletType);
+  //   } else {
+  //     console.log("No match found.");
+  //   }
 }

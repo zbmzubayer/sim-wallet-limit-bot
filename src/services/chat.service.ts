@@ -8,21 +8,91 @@ export const createChatWithDeviceSims = async (dto: ChatDto) => {
   const { telegramChatId, title, deviceNo, sims } = dto;
   const existingChat = await prisma.chat.findUnique({
     where: { telegramChatId },
-    include: { devices: { include: { deviceSims: true } } },
+    select: { id: true, title: true, devices: { include: { deviceSims: true } } },
   });
-  if (existingChat && existingChat.devices.length) {
-    const existingDevice = existingChat.devices.find((device) => device.deviceNo === deviceNo);
-    if (existingDevice) {
+  return await prisma.$transaction(async (tx) => {
+    if (existingChat && existingChat.devices.length) {
+      const existingDevice = existingChat.devices.find((device) => device.deviceNo === deviceNo);
+      if (existingDevice) {
+        await tx.deviceSim.deleteMany({ where: { deviceId: existingDevice.id } });
+        const simData = [];
+        for (const sim of sims) {
+          const { simNo, ...simPayload } = sim;
+          const simRecord = await tx.sim.upsert({
+            where: { phone: sim.phone },
+            update: simPayload,
+            create: simPayload,
+          });
+          simData.push({ simId: simRecord.id, simNo });
+        }
+        await Promise.all([
+          tx.deviceSim.createMany({
+            data: simData.map((sim) => ({
+              simId: sim.simId,
+              simNo: sim.simNo,
+              deviceId: existingDevice.id,
+            })),
+          }),
+          existingChat.title !== title
+            ? tx.chat.update({ where: { id: existingChat.id }, data: { title } })
+            : null,
+        ]);
+        return true;
+      } else {
+        const device = await tx.device.create({ data: { deviceNo, chatId: existingChat.id } });
+        const simData = [];
+        for (const sim of sims) {
+          const { simNo, ...simPayload } = sim;
+          const simRecord = await tx.sim.upsert({
+            where: { phone: sim.phone },
+            update: simPayload,
+            create: simPayload,
+          });
+          simData.push({ simId: simRecord.id, simNo });
+        }
+        await Promise.all([
+          tx.deviceSim.createMany({
+            data: simData.map((sim) => ({
+              simId: sim.simId,
+              simNo: sim.simNo,
+              deviceId: device.id,
+            })),
+          }),
+          existingChat.title !== title
+            ? tx.chat.update({ where: { id: existingChat.id }, data: { title } })
+            : null,
+        ]);
+        return true;
+      }
+    } else {
+      const chat = await tx.chat.create({ data: { telegramChatId, title } });
+      const device = await tx.device.create({ data: { deviceNo, chatId: chat.id } });
+      const simData = [];
+      for (const sim of sims) {
+        const { simNo, ...simPayload } = sim;
+        const simRecord = await tx.sim.upsert({
+          where: { phone: sim.phone },
+          update: simPayload,
+          create: simPayload,
+        });
+        simData.push({ simId: simRecord.id, simNo });
+      }
+      await tx.deviceSim.createMany({
+        data: simData.map((sim) => ({ simId: sim.simId, simNo: sim.simNo, deviceId: device.id })),
+      });
+      return true;
     }
-  }
-  return await prisma.chat.create({ data: { telegramChatId, title } });
+  });
 };
 
 export const getChatTelegramChatId = async (telegramChatId: string) => {
   return await prisma.chat.findUnique({
     where: { telegramChatId },
     select: {
-      devices: { include: { deviceSims: { include: { sim: true }, orderBy: { simNo: "asc" } } } },
+      devices: {
+        include: { deviceSims: { include: { sim: true }, orderBy: { simNo: "asc" } } },
+        orderBy: { deviceNo: "asc" },
+      },
     },
   });
 };
@@ -36,18 +106,22 @@ export const updateBalance = async (telegramChatId: string, dto: BalanceUpdateDt
     where: { telegramChatId },
     select: {
       title: true,
-      devices: { include: { deviceSims: { include: { sim: true }, orderBy: { simNo: "asc" } } } },
+      devices: {
+        include: { deviceSims: { include: { sim: true }, orderBy: { simNo: "asc" } } },
+        orderBy: { deviceNo: "asc" },
+      },
     },
   });
 
-  if (!chat) throw new Error("Chat not found");
-  if (!chat.devices.length) throw new Error("No devices found for this chat");
+  if (!chat) throw new Error("Chat not found", { cause: "NOT_FOUND" });
+  if (!chat.devices.length)
+    throw new Error("No devices found for this chat", { cause: "NOT_FOUND" });
 
   const device = chat.devices.find((d) => d.deviceNo === dto.deviceNo);
-  if (!device) throw new Error("Device not found for this chat");
+  if (!device) throw new Error("Device not found for this chat", { cause: "NOT_FOUND" });
 
   const sim = device.deviceSims.find((s) => s.simNo === dto.simNo);
-  if (!sim) throw new Error("Sim not found for this device");
+  if (!sim) throw new Error("Sim not found for this device", { cause: "NOT_FOUND" });
 
   if (dto.walletType === "bk") sim.sim.bkLimit -= dto.amount;
   else sim.sim.ngLimit -= dto.amount;
@@ -64,9 +138,9 @@ export const updateBalance = async (telegramChatId: string, dto: BalanceUpdateDt
           simId: sim.simId,
           amount: dto.amount,
           charge: 0,
-          operation: "SM",
+          operation: dto.walletType.toUpperCase(),
           type: dto.amount > 0 ? SIM_TRANSACTION_TYPE.IN : SIM_TRANSACTION_TYPE.OUT,
-          note: `${dto.amount > 0 ? "Credited" : "Debited"} via bot by group: ${chat.title}`,
+          note: `${dto.amount > 0 ? "Credited" : "Debited"} via bot in group: ${chat.title}`,
         },
       }),
       tx.sim.update({ where: { id: sim.simId }, data: updatePayload }),
@@ -87,14 +161,15 @@ export const undoBalance = async (
     },
   });
 
-  if (!chat) throw new Error("Chat not found");
-  if (!chat.devices.length) throw new Error("No devices found for this chat");
+  if (!chat) throw new Error("Chat not found", { cause: "NOT_FOUND" });
+  if (!chat.devices.length)
+    throw new Error("No devices found for this chat", { cause: "NOT_FOUND" });
 
   const device = chat.devices.find((d) => d.deviceNo === dto.deviceNo);
-  if (!device) throw new Error("Device not found for this chat");
+  if (!device) throw new Error("Device not found for this chat", { cause: "NOT_FOUND" });
 
   const sim = device.deviceSims.find((s) => s.simNo === dto.simNo);
-  if (!sim) throw new Error("Sim not found for this device");
+  if (!sim) throw new Error("Sim not found for this device", { cause: "NOT_FOUND" });
 
   if (dto.walletType === "bk") sim.sim.bkLimit += dto.amount;
   else sim.sim.ngLimit += dto.amount;
@@ -113,100 +188,3 @@ export const undoBalance = async (
 
   return chat;
 };
-
-const demoData: DeviceSimData = {
-  devices: [
-    {
-      id: 1,
-      createdAt: new Date("2023-01-01"),
-      updatedAt: new Date("2023-01-15"),
-      deviceNo: 1,
-      chatId: 1,
-      deviceSims: [
-        {
-          id: 1,
-          simNo: 1,
-          deviceId: 1,
-          simId: 1,
-          sim: {
-            id: 1,
-            createdAt: new Date("2023-01-01"),
-            updatedAt: new Date("2023-01-15"),
-            phone: "01832553404",
-            bkLimit: 80000,
-            ngLimit: 80000,
-            bkBalance: 0,
-            ngBalance: 0,
-            bkMonthlyUsed: 0,
-            ngMonthlyUsed: 0,
-          },
-        },
-        {
-          id: 2,
-          simNo: 2,
-          deviceId: 1,
-          simId: 2,
-          sim: {
-            id: 2,
-            createdAt: new Date("2023-01-01"),
-            updatedAt: new Date("2023-01-15"),
-            phone: "01830368041",
-            bkLimit: 80000,
-            ngLimit: 0,
-            bkBalance: 0,
-            ngBalance: 0,
-            bkMonthlyUsed: 0,
-            ngMonthlyUsed: 0,
-          },
-        },
-      ],
-    },
-    {
-      id: 1,
-      createdAt: new Date("2023-01-01"),
-      updatedAt: new Date("2023-01-15"),
-      deviceNo: 1,
-      chatId: 1,
-      deviceSims: [
-        {
-          id: 1,
-          simNo: 1,
-          deviceId: 1,
-          simId: 1,
-          sim: {
-            id: 1,
-            createdAt: new Date("2023-01-01"),
-            updatedAt: new Date("2023-01-15"),
-            phone: "01832553404",
-            bkLimit: 80000,
-            ngLimit: 80000,
-            bkBalance: 0,
-            ngBalance: 0,
-            bkMonthlyUsed: 0,
-            ngMonthlyUsed: 0,
-          },
-        },
-        {
-          id: 2,
-          simNo: 2,
-          deviceId: 1,
-          simId: 2,
-          sim: {
-            id: 2,
-            createdAt: new Date("2023-01-01"),
-            updatedAt: new Date("2023-01-15"),
-            phone: "01830368041",
-            bkLimit: 80000,
-            ngLimit: 0,
-            bkBalance: 0,
-            ngBalance: 0,
-            bkMonthlyUsed: 0,
-            ngMonthlyUsed: 0,
-          },
-        },
-      ],
-    },
-  ],
-};
-
-console.log(formatDeviceData(demoData));

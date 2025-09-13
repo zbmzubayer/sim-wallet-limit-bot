@@ -57,7 +57,7 @@ export function extractSimData(line: string): DeviceSimData["sims"][number] | nu
   return {
     simNo: parseInt(match[1], 10), // Sim number
     phone: match[2], // Phone number
-    bkLimit: parseInt(match[3], 10), // BK value
-    ngLimit: parseInt(match[4], 10), // NG value
+    bkLimit: parseInt(match[3], 10) * 1000, // BK value
+    ngLimit: parseInt(match[4], 10) * 1000, // NG value
   };
 }

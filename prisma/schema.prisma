@@ -37,16 +37,28 @@ model Device {
 }
 
 model Sim {
-  id            Int      @id @default(autoincrement())
-  phone         String   @unique
-  bkBalance     Float    @default(0)
-  ngBalance     Float    @default(0)
-  bkLimit       Float
-  ngLimit       Float
-  bkMonthlyUsed Float
-  ngMonthlyUsed Float
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id         Int      @id @default(autoincrement())
+  phone      String   @unique
+  bkLimit    Float
+  ngLimit    Float
+  bkBalance  Float    @default(0)
+  ngBalance  Float    @default(0)
+  bkSM       Float    @default(0)
+  bkCO       Float    @default(0)
+  bkMER      Float    @default(0)
+  ngSM       Float    @default(0)
+  ngCO       Float    @default(0)
+  ngMER      Float    @default(0)
+  bkTotalIn  Float    @default(0)
+  bkTotalSM  Float    @default(0)
+  bkTotalCO  Float    @default(0)
+  bkTotalMER Float    @default(0)
+  ngTotalIn  Float    @default(0)
+  ngTotalSM  Float    @default(0)
+  ngTotalCO  Float    @default(0)
+  ngTotalMER Float    @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   simTransactionHistories SimTransactionHistory[]
   deviceSims              DeviceSim[]
