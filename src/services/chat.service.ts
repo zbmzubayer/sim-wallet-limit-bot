@@ -1,7 +1,6 @@
 import { SIM_TRANSACTION_TYPE } from "../enums/sim.enum";
 import { Prisma } from "../generated/prisma";
 import { prisma } from "../lib/db";
-import { DeviceSimData, formatDeviceData } from "../utils/formatDeviceData";
 import { BalanceUpdateDto, ChatDto } from "../validations/chat.dto";
 
 export const createChatWithDeviceSims = async (dto: ChatDto) => {
@@ -130,6 +129,8 @@ export const updateBalance = async (telegramChatId: string, dto: BalanceUpdateDt
     dto.walletType === "bk"
       ? { bkBalance: { increment: dto.amount }, bkLimit: { decrement: dto.amount } }
       : { ngBalance: { increment: dto.amount }, ngLimit: { decrement: dto.amount } };
+  const selectedDevice = chat.devices.find((d) => d.deviceNo === dto.deviceNo);
+  chat.devices = selectedDevice ? [selectedDevice] : [];
 
   return await prisma.$transaction(async (tx) => {
     const [transaction] = await Promise.all([

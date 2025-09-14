@@ -5,7 +5,13 @@ import {
   deleteBotUserByUsername,
   getBotUserByUsername,
 } from "./services/bot-user.service";
-import { isAuthorized, isOwner } from "./services/auth.service";
+import {
+  addAuthorizedBotUser,
+  authBotUserCache,
+  isAuthorized,
+  isOwner,
+  removeAuthorizedBotUser,
+} from "./services/auth.service";
 import {
   createChatWithDeviceSims,
   deleteChatByTelegramChatId,
@@ -13,7 +19,7 @@ import {
   undoBalance,
   updateBalance,
 } from "./services/chat.service";
-import { formatDeviceData } from "./utils/formatDeviceData";
+import { formatDeviceData, formatUpdateBalanceData } from "./utils/formatDeviceData";
 import { BalanceUpdateDto } from "./validations/chat.dto";
 
 export function botCommand(bot: Bot) {
@@ -157,6 +163,7 @@ Sim4 - 01000000004 BK 80K | NG 50K
       });
     } else {
       await createBotUser(username); // create the user in DB
+      addAuthorizedBotUser(username); // Add to cache
       return ctx.reply(`✅ User ${username} has been added successfully.`, {
         reply_parameters: { message_id: ctx.message?.message_id! },
       });
@@ -177,6 +184,7 @@ Sim4 - 01000000004 BK 80K | NG 50K
       });
     } else {
       await deleteBotUserByUsername(username); // Delete user in DB
+      removeAuthorizedBotUser(username); // Remove from cache if exists
       return ctx.reply(`\uf235\nUser ${username} has been removed successfully.`, {
         reply_parameters: { message_id: ctx.message?.message_id! },
       });
@@ -190,10 +198,10 @@ Sim4 - 01000000004 BK 80K | NG 50K
     const regex = /^([+-]\d+)\s+ds-(\d+)\s+sim([1-4])\s+(bk|ng)$/i;
     const match = ctx.message.text.match(regex);
 
-    if (!match)
-      return ctx.reply("❌ Invalid format. Use: +30000 ds-1 sim1 bk", {
-        reply_parameters: { message_id: ctx.message?.message_id! },
-      });
+    if (!match) return;
+    // return ctx.reply("❌ Invalid format. Use: +30000 ds-1 sim1 bk", {
+    //   reply_parameters: { message_id: ctx.message?.message_id! },
+    // });
     if (!match[1] || !match[2] || !match[3] || !match[4]) {
       return ctx.reply("❌ Invalid format. Use: +30000 ds-1 sim1 bk", {
         reply_parameters: { message_id: ctx.message?.message_id! },
@@ -215,9 +223,11 @@ Sim4 - 01000000004 BK 80K | NG 50K
       transactions.push({ ...payload, transactionId });
       transactionMap.set(telegramChatId, transactions);
 
-      const outputText = `✅ Updated DS-${deviceNo} Sim${simNo} ${walletType.toUpperCase()}\n`;
+      const outputText = `✅ #${
+        transactions.length
+      } ➡️ Updated DS-${deviceNo} Sim${simNo} ${walletType.toUpperCase()}\n\n`;
 
-      const formattedOutput = formatDeviceData(chat);
+      const formattedOutput = formatUpdateBalanceData(chat);
 
       return ctx.reply(outputText + formattedOutput, {
         reply_parameters: { message_id: ctx.message?.message_id! },
