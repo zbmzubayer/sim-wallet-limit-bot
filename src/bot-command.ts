@@ -125,7 +125,7 @@ Sim4 - 01000000004 BK 80K | NG 50K
     }
     const lastTransaction = transactions.pop()!;
     try {
-      await undoBalance(telegramChatId, {
+      const chat = await undoBalance(telegramChatId, {
         deviceNo: lastTransaction.deviceNo,
         simNo: lastTransaction.simNo,
         amount: -lastTransaction.amount, // Revert the amount
@@ -133,7 +133,14 @@ Sim4 - 01000000004 BK 80K | NG 50K
         transactionId: lastTransaction.transactionId,
       });
       transactionMap.set(telegramChatId, transactions); // Update the map
-      return ctx.reply("🔙 Last transaction has been undone", {
+
+      const outputText = `🔙 Undone DS-${lastTransaction.deviceNo} Sim${
+        lastTransaction.simNo
+      } ${lastTransaction.walletType.toUpperCase()}\n\n`;
+
+      const formattedOutput = formatUpdateBalanceData(chat);
+
+      return ctx.reply(outputText + formattedOutput, {
         reply_parameters: { message_id: ctx.message?.message_id! },
       });
     } catch (error) {
@@ -144,6 +151,65 @@ Sim4 - 01000000004 BK 80K | NG 50K
         });
       }
       return ctx.reply("❌ Failed to undo the last transaction.", {
+        reply_parameters: { message_id: ctx.message?.message_id! },
+      });
+    }
+  });
+
+  // Edit command
+  bot.command("edit", async (ctx) => {
+    // Only owner and authorized users can set
+    if (!isOwner(ctx.from?.id.toString() || "") && !isAuthorized(ctx.from?.username || "")) return;
+
+    const regex = /^([+-]\d+)\s+ds-(\d+)\s+sim([1-4])\s+(bk|ng)$/i;
+    const match = ctx.match.match(regex);
+
+    if (!match) return;
+    // return ctx.reply("❌ Invalid format. Use: +30000 ds-1 sim1 bk", {
+    //   reply_parameters: { message_id: ctx.message?.message_id! },
+    // });
+    if (!match[1] || !match[2] || !match[3] || !match[4]) {
+      return ctx.reply("❌ Invalid format. Use: +30000 ds-1 sim1 bk", {
+        reply_parameters: { message_id: ctx.message?.message_id! },
+      });
+    }
+
+    const amount = parseInt(match[1], 10);
+    const deviceNo = parseInt(match[2], 10);
+    const simNo = parseInt(match[3], 10);
+    const walletType = match[4]?.toLowerCase();
+    const telegramChatId = ctx.chat.id.toString();
+    const payload = { deviceNo, simNo, amount, walletType };
+
+    try {
+      const { transactionId, ...chat } = await updateBalance(
+        telegramChatId,
+        ctx.from?.username!,
+        payload
+      );
+
+      // Store the transaction for potential undo
+      const transactions = transactionMap.get(telegramChatId) || [];
+      transactions.push({ ...payload, transactionId });
+      transactionMap.set(telegramChatId, transactions);
+
+      const outputText = `✅ #${
+        transactions.length
+      } ➡️ Updated DS-${deviceNo} Sim${simNo} ${walletType.toUpperCase()}\n\n`;
+
+      const formattedOutput = formatUpdateBalanceData(chat);
+
+      return ctx.reply(outputText + formattedOutput, {
+        reply_parameters: { message_id: ctx.message?.message_id! },
+      });
+    } catch (error) {
+      console.error("Error updating balance:", error);
+      if (error instanceof Error && error.cause === "NOT_FOUND") {
+        return ctx.reply("❌ No wallets found for this chat.", {
+          reply_parameters: { message_id: ctx.message?.message_id! },
+        });
+      }
+      return ctx.reply(`❌ Failed to update balance`, {
         reply_parameters: { message_id: ctx.message?.message_id! },
       });
     }

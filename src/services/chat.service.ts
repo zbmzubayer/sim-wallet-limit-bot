@@ -133,8 +133,7 @@ export const updateBalance = async (
     dto.walletType === "bk"
       ? { bkBalance: { increment: dto.amount }, bkLimit: { decrement: dto.amount } }
       : { ngBalance: { increment: dto.amount }, ngLimit: { decrement: dto.amount } };
-  const selectedDevice = chat.devices.find((d) => d.deviceNo === dto.deviceNo);
-  chat.devices = selectedDevice ? [selectedDevice] : [];
+  chat.devices = device ? [device] : [];
 
   return await prisma.$transaction(async (tx) => {
     const [transaction] = await Promise.all([
@@ -178,6 +177,8 @@ export const undoBalance = async (
 
   if (dto.walletType === "bk") sim.sim.bkLimit += dto.amount;
   else sim.sim.ngLimit += dto.amount;
+
+  chat.devices = device ? [device] : [];
 
   const updatePayload: Prisma.SimUncheckedUpdateInput =
     dto.walletType === "bk"
