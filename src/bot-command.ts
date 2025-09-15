@@ -216,7 +216,11 @@ Sim4 - 01000000004 BK 80K | NG 50K
     const payload = { deviceNo, simNo, amount, walletType };
 
     try {
-      const { transactionId, ...chat } = await updateBalance(telegramChatId, payload);
+      const { transactionId, ...chat } = await updateBalance(
+        telegramChatId,
+        ctx.from.username!,
+        payload
+      );
 
       // Store the transaction for potential undo
       const transactions = transactionMap.get(telegramChatId) || [];

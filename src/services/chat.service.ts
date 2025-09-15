@@ -100,7 +100,11 @@ export const deleteChatByTelegramChatId = async (telegramChatId: string) => {
   return await prisma.chat.delete({ where: { telegramChatId } });
 };
 
-export const updateBalance = async (telegramChatId: string, dto: BalanceUpdateDto) => {
+export const updateBalance = async (
+  telegramChatId: string,
+  username: string,
+  dto: BalanceUpdateDto
+) => {
   const chat = await prisma.chat.findUnique({
     where: { telegramChatId },
     select: {
@@ -141,7 +145,7 @@ export const updateBalance = async (telegramChatId: string, dto: BalanceUpdateDt
           charge: 0,
           operation: dto.walletType.toUpperCase(),
           type: dto.amount > 0 ? SIM_TRANSACTION_TYPE.IN : SIM_TRANSACTION_TYPE.OUT,
-          note: `${dto.amount > 0 ? "Credited" : "Debited"} via bot in group: ${chat.title}`,
+          note: `Group: ${chat.title}, By: ${username}`,
         },
       }),
       tx.sim.update({ where: { id: sim.simId }, data: updatePayload }),
