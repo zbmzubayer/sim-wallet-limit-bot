@@ -80,7 +80,12 @@ Sim4 - 01000000004 BK 80K | NG 50K
       });
     } catch (error) {
       console.error("Error resetting wallets:", error);
-      return ctx.reply("❌ No wallets found for this chat.", {
+      if (error instanceof Error && error.cause === "NOT_FOUND") {
+        return ctx.reply("❌ No wallets found for this chat.", {
+          reply_parameters: { message_id: ctx.message?.message_id! },
+        });
+      }
+      return ctx.reply("❌ Failed to reset wallets for this chat.", {
         reply_parameters: { message_id: ctx.message?.message_id! },
       });
     }

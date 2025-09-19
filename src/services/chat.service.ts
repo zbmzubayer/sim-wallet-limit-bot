@@ -97,7 +97,34 @@ export const getChatTelegramChatId = async (telegramChatId: string) => {
 };
 
 export const deleteChatByTelegramChatId = async (telegramChatId: string) => {
-  return await prisma.chat.delete({ where: { telegramChatId } });
+  const chat = await prisma.chat.findUnique({
+    where: { telegramChatId },
+    select: { id: true, devices: { include: { deviceSims: true } } },
+  });
+  if (!chat) throw new Error("Chat not found", { cause: "NOT_FOUND" });
+
+  const simIDs = chat.devices.flatMap((d) => d.deviceSims.map((s) => s.simId));
+
+  return await prisma.$transaction(async (tx) => {
+    await Promise.all([
+      tx.chat.delete({ where: { telegramChatId } }),
+      tx.sim.updateMany({
+        where: { id: { in: simIDs } },
+        data: {
+          bkBalance: 0,
+          ngBalance: 0,
+          bkLimit: 0,
+          ngLimit: 0,
+          bkSM: 0,
+          bkCO: 0,
+          bkMER: 0,
+          ngSM: 0,
+          ngCO: 0,
+          ngMER: 0,
+        },
+      }),
+    ]);
+  });
 };
 
 export const updateBalance = async (
