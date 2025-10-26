@@ -221,3 +221,25 @@ export const undoBalance = async (
 
   return chat;
 };
+
+export const removeDeviceFromChat = async (telegramChatId: string, deviceNo: number) => {
+  const chat = await prisma.chat.findUnique({
+    where: { telegramChatId },
+    select: {
+      id: true,
+      devices: {
+        where: { deviceNo },
+        include: { deviceSims: true },
+      },
+    },
+  });
+
+  if (!chat) throw new Error("Chat not found", { cause: "NOT_FOUND" });
+
+  const device = chat.devices.find((d) => d.deviceNo === deviceNo);
+  if (!device) throw new Error("Device not found for this chat", { cause: "NOT_FOUND" });
+
+  await prisma.device.delete({ where: { id: device.id } });
+
+  return true;
+};

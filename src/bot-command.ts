@@ -16,6 +16,7 @@ import {
   createChatWithDeviceSims,
   deleteChatByTelegramChatId,
   getChatTelegramChatId,
+  removeDeviceFromChat,
   undoBalance,
   updateBalance,
 } from "./services/chat.service";
@@ -215,6 +216,47 @@ Sim4 - 01000000004 BK 80K | NG 50K
         });
       }
       return ctx.reply(`❌ Failed to update balance`, {
+        reply_parameters: { message_id: ctx.message?.message_id! },
+      });
+    }
+  });
+
+  // Remove Device command
+  bot.command("remove", async (ctx) => {
+    // Only owner and authorized users can set
+    if (!isOwner(ctx.from?.id.toString() || "") && !isAuthorized(ctx.from?.username || "")) return;
+
+    const regex = /^ds-(\d+)\s*$/i;
+    const match = ctx.match.match(regex);
+
+    if (!match)
+      return ctx.reply("❌ Invalid format. Use: +30000 ds-1 sim1 bk", {
+        reply_parameters: { message_id: ctx.message?.message_id! },
+      });
+    if (!match[1]) {
+      return ctx.reply("❌ Invalid format. Use: +30000 ds-1 sim1 bk", {
+        reply_parameters: { message_id: ctx.message?.message_id! },
+      });
+    }
+
+    const deviceNo = parseInt(match[1], 10);
+
+    console.log("Removing deviceNo:", deviceNo);
+
+    try {
+      await removeDeviceFromChat(ctx.chat.id.toString(), deviceNo);
+
+      return ctx.reply("✅ Device removed successfully.", {
+        reply_parameters: { message_id: ctx.message?.message_id! },
+      });
+    } catch (error) {
+      console.error("Error removing device:", error);
+      if (error instanceof Error && error.cause === "NOT_FOUND") {
+        return ctx.reply("❌ No wallets/devices found for this chat.", {
+          reply_parameters: { message_id: ctx.message?.message_id! },
+        });
+      }
+      return ctx.reply(`❌ Failed to remove device`, {
         reply_parameters: { message_id: ctx.message?.message_id! },
       });
     }
