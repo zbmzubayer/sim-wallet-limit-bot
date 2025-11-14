@@ -230,18 +230,16 @@ Sim4 - 01000000004 BK 80K | NG 50K
     const match = ctx.match.match(regex);
 
     if (!match)
-      return ctx.reply("❌ Invalid format. Use: +30000 ds-1 sim1 bk", {
+      return ctx.reply("❌ Invalid format. Use: ds-1", {
         reply_parameters: { message_id: ctx.message?.message_id! },
       });
     if (!match[1]) {
-      return ctx.reply("❌ Invalid format. Use: +30000 ds-1 sim1 bk", {
+      return ctx.reply("❌ Invalid format. Use: ds-1", {
         reply_parameters: { message_id: ctx.message?.message_id! },
       });
     }
 
     const deviceNo = parseInt(match[1], 10);
-
-    console.log("Removing deviceNo:", deviceNo);
 
     try {
       await removeDeviceFromChat(ctx.chat.id.toString(), deviceNo);

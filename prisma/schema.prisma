@@ -8,6 +8,14 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model BotUser {
   id               Int      @id @default(autoincrement())
   telegramUsername String   @unique
@@ -79,14 +87,15 @@ model DeviceSim {
 }
 
 model SimTransactionHistory {
-  id        Int      @id @default(autoincrement())
-  operation String
-  type      String // IN or OUT
-  amount    Float
-  charge    Float
-  note      String?
-  createdAt DateTime @default(now())
-  simId     Int
+  id         Int      @id @default(autoincrement())
+  operation  String
+  type       String // IN or OUT
+  amount     Float
+  charge     Float
+  note       String?
+  operatedBy String?
+  createdAt  DateTime @default(now())
+  simId      Int
 
   sim Sim @relation(fields: [simId], references: [id])
 }
