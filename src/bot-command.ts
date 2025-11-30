@@ -15,7 +15,7 @@ import {
 import {
   createChatWithDeviceSims,
   deleteChatByTelegramChatId,
-  getChatTelegramChatId,
+  getChatByTelegramChatId,
   removeDeviceFromChat,
   undoBalance,
   updateBalance,
@@ -99,7 +99,7 @@ Sim4 - 01000000004 BK 80K | NG 50K
 
     const telegramChatId = ctx.chat.id.toString();
     try {
-      const chatData = await getChatTelegramChatId(telegramChatId);
+      const chatData = await getChatByTelegramChatId(telegramChatId);
       if (!chatData) {
         return ctx.reply("⚠️ No wallets set yet for this chat", {
           reply_parameters: { message_id: ctx.message?.message_id! },

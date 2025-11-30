@@ -1,7 +1,7 @@
 import { Prisma } from "../generated/prisma";
 
 export type DeviceSimData = Prisma.ChatGetPayload<{
-  select: { devices: { include: { deviceSims: { include: { sim: true } } } } };
+  select: { devices: { include: { sims: true } } };
 }>;
 
 export function formatDeviceData(chat: DeviceSimData): string {
@@ -11,11 +11,9 @@ export function formatDeviceData(chat: DeviceSimData): string {
     // Add device header (assuming device has a name or ID)
     output += `📟 DS-${device.deviceNo}\n`;
 
-    device.deviceSims.forEach((deviceSim) => {
-      const sim = deviceSim.sim;
-
+    device.sims.forEach((sim) => {
       // Format: Sim1 - 01832553404 | BK: 80K | NG: 80K
-      output += `Sim${deviceSim.simNo} - ${sim.phone || "N/A"} | BK: ${sim.bkLimit / 1000}K | NG: ${
+      output += `Sim${sim.simNo} - ${sim.phone || "N/A"} | BK: ${sim.bkLimit / 1000}K | NG: ${
         sim.ngLimit / 1000
       }K\n`;
     });
@@ -33,11 +31,9 @@ export function formatUpdateBalanceData(chat: DeviceSimData): string {
   let output = "";
 
   chat.devices.forEach((device) => {
-    device.deviceSims.forEach((deviceSim) => {
-      const sim = deviceSim.sim;
-
+    device.sims.forEach((sim) => {
       // Format: Sim1 - 01832553404 | BK: 80K | NG: 80K
-      output += `Sim${deviceSim.simNo} - ${sim.phone || "N/A"} | BK: ${sim.bkLimit / 1000}K | NG: ${
+      output += `Sim${sim.simNo} - ${sim.phone || "N/A"} | BK: ${sim.bkLimit / 1000}K | NG: ${
         sim.ngLimit / 1000
       }K\n`;
     });

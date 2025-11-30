@@ -40,50 +40,43 @@ model Device {
   updatedAt DateTime @updatedAt
   chatId    Int
 
-  chat       Chat        @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  deviceSims DeviceSim[]
+  chat Chat  @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sims Sim[]
 }
 
 model Sim {
-  id         Int      @id @default(autoincrement())
-  phone      String   @unique
-  bkLimit    Float
-  ngLimit    Float
-  bkBalance  Float    @default(0)
-  ngBalance  Float    @default(0)
-  bkSM       Float    @default(0)
-  bkCO       Float    @default(0)
-  bkMER      Float    @default(0)
-  ngSM       Float    @default(0)
-  ngCO       Float    @default(0)
-  ngMER      Float    @default(0)
-  bkTotalIn  Float    @default(0)
-  bkTotalSM  Float    @default(0)
-  bkTotalCO  Float    @default(0)
-  bkTotalMER Float    @default(0)
-  ngTotalIn  Float    @default(0)
-  ngTotalSM  Float    @default(0)
-  ngTotalCO  Float    @default(0)
-  ngTotalMER Float    @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id               Int       @id @default(autoincrement())
+  phone            String    @unique
+  simNo            Int
+  bkLimit          Float
+  ngLimit          Float
+  bkBalance        Float     @default(0)
+  ngBalance        Float     @default(0)
+  bkSM             Float     @default(0)
+  bkCO             Float     @default(0)
+  bkMER            Float     @default(0)
+  ngSM             Float     @default(0)
+  ngCO             Float     @default(0)
+  ngMER            Float     @default(0)
+  bkTotalIn        Float     @default(0)
+  bkTotalSM        Float     @default(0)
+  bkTotalCO        Float     @default(0)
+  bkTotalMER       Float     @default(0)
+  ngTotalIn        Float     @default(0)
+  ngTotalSM        Float     @default(0)
+  ngTotalCO        Float     @default(0)
+  ngTotalMER       Float     @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  lastCashedInDate DateTime?
+
+  deviceId Int?
+  device   Device? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
 
   simTransactionHistories SimTransactionHistory[]
-  deviceSims              DeviceSim[]
-}
 
-model DeviceSim {
-  id       Int @id @default(autoincrement())
-  simNo    Int
-  deviceId Int
-  simId    Int
-
-  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-  sim    Sim    @relation(fields: [simId], references: [id], onDelete: Cascade)
-
-  @@unique([deviceId, simId])
-  @@index([deviceId])
-  @@index([simId])
+  @@unique([phone, simNo])
+  @@unique([deviceId, simNo])
 }
 
 model SimTransactionHistory {
