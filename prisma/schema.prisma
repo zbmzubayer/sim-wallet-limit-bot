@@ -30,18 +30,29 @@ model Chat {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  devices Device[]
+  chatDevices ChatDevice[]
 }
 
 model Device {
   id        Int      @id @default(autoincrement())
-  deviceNo  Int
+  deviceNo  Int      @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  chatId    Int
 
-  chat Chat  @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  sims Sim[]
+  sims        Sim[]
+  chatDevices ChatDevice[]
+}
+
+model ChatDevice {
+  id       Int @id @default(autoincrement())
+  chatId   Int
+  deviceId Int
+
+  chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@index([chatId])
 }
 
 model Sim {

@@ -7,12 +7,21 @@ export const createChatWithDeviceSims = async (dto: ChatDto) => {
   const { telegramChatId, title, deviceNo, sims } = dto;
   const existingChat = await prisma.chat.findUnique({
     where: { telegramChatId },
-    select: { id: true, title: true, devices: { include: { sims: true } } },
+    select: { id: true, title: true, chatDevices: true },
   });
+  const existingDevice = await prisma.device.findUnique({ where: { deviceNo } });
+
   return await prisma.$transaction(async (tx) => {
-    if (existingChat && existingChat.devices.length) {
-      const existingDevice = existingChat.devices.find((device) => device.deviceNo === deviceNo);
+    if (existingChat) {
       if (existingDevice) {
+        const chatDevice = existingChat.chatDevices.find((cd) => cd.deviceId === existingDevice.id);
+        if (!chatDevice) {
+          // Link existing device to existing chat
+          await tx.chatDevice.create({
+            data: { chatId: existingChat.id, deviceId: existingDevice.id },
+          });
+        }
+        // Device already linked to chat, just update sims and title if needed
         for (const sim of sims) {
           await tx.sim.upsert({
             where: { phone: sim.phone },
@@ -26,7 +35,10 @@ export const createChatWithDeviceSims = async (dto: ChatDto) => {
 
         return true;
       } else {
-        const device = await tx.device.create({ data: { deviceNo, chatId: existingChat.id } });
+        const device = await tx.device.create({ data: { deviceNo } });
+        // Link new device to existing chat
+        await tx.chatDevice.create({ data: { chatId: existingChat.id, deviceId: device.id } });
+
         for (const sim of sims) {
           await tx.sim.upsert({
             where: { phone: sim.phone },
@@ -42,7 +54,9 @@ export const createChatWithDeviceSims = async (dto: ChatDto) => {
       }
     } else {
       const chat = await tx.chat.create({ data: { telegramChatId, title } });
-      const device = await tx.device.create({ data: { deviceNo, chatId: chat.id } });
+      const device = await tx.device.create({ data: { deviceNo } });
+      // Link new device to new chat
+      await tx.chatDevice.create({ data: { chatId: chat.id, deviceId: device.id } });
 
       for (const sim of sims) {
         await tx.sim.upsert({
@@ -60,9 +74,9 @@ export const getChatByTelegramChatId = async (telegramChatId: string) => {
   return await prisma.chat.findUnique({
     where: { telegramChatId },
     select: {
-      devices: {
-        include: { sims: { orderBy: { simNo: "asc" } } },
-        orderBy: { deviceNo: "asc" },
+      chatDevices: {
+        include: { device: { include: { sims: { orderBy: { simNo: "asc" } } } } },
+        orderBy: { device: { deviceNo: "asc" } },
       },
     },
   });
@@ -71,11 +85,11 @@ export const getChatByTelegramChatId = async (telegramChatId: string) => {
 export const deleteChatByTelegramChatId = async (telegramChatId: string) => {
   const chat = await prisma.chat.findUnique({
     where: { telegramChatId },
-    select: { id: true, devices: { include: { sims: true } } },
+    select: { id: true, chatDevices: { include: { device: { include: { sims: true } } } } },
   });
   if (!chat) throw new Error("Chat not found", { cause: "NOT_FOUND" });
 
-  const simIDs = chat.devices.flatMap((d) => d.sims.map((s) => s.id));
+  const simIDs = chat.chatDevices.flatMap((chatDevice) => chatDevice.device.sims.map((s) => s.id));
 
   return await prisma.$transaction(async (tx) => {
     await Promise.all([
@@ -108,18 +122,18 @@ export const updateBalance = async (
     where: { telegramChatId },
     select: {
       title: true,
-      devices: {
-        include: { sims: { orderBy: { simNo: "asc" } } },
-        orderBy: { deviceNo: "asc" },
+      chatDevices: {
+        include: { device: { include: { sims: { orderBy: { simNo: "asc" } } } } },
+        orderBy: { device: { deviceNo: "asc" } },
       },
     },
   });
 
   if (!chat) throw new Error("Chat not found", { cause: "NOT_FOUND" });
-  if (!chat.devices.length)
+  if (!chat.chatDevices.length)
     throw new Error("No devices found for this chat", { cause: "NOT_FOUND" });
 
-  const device = chat.devices.find((d) => d.deviceNo === dto.deviceNo);
+  const device = chat.chatDevices.find((cd) => cd.device.deviceNo === dto.deviceNo)?.device;
   if (!device) throw new Error("Device not found for this chat", { cause: "NOT_FOUND" });
 
   const sim = device.sims.find((s) => s.simNo === dto.simNo);
@@ -133,22 +147,20 @@ export const updateBalance = async (
       ? { bkBalance: { increment: dto.amount }, bkLimit: { decrement: dto.amount } }
       : { ngBalance: { increment: dto.amount }, ngLimit: { decrement: dto.amount } };
   updatePayload.lastCashedInDate = new Date();
-  chat.devices = device ? [device] : [];
 
   return await prisma.$transaction(async (tx) => {
-    const [transaction] = await Promise.all([
-      tx.simTransactionHistory.create({
-        data: {
-          simId: sim.id,
-          amount: dto.amount,
-          charge: 0,
-          operation: dto.walletType.toUpperCase(),
-          type: dto.amount > 0 ? SIM_TRANSACTION_TYPE.IN : SIM_TRANSACTION_TYPE.OUT,
-          note: `Group: ${chat.title}, By: ${username}`,
-        },
-      }),
-      tx.sim.update({ where: { id: sim.id }, data: updatePayload }),
-    ]);
+    const transaction = await tx.simTransactionHistory.create({
+      data: {
+        simId: sim.id,
+        amount: dto.amount,
+        charge: 0,
+        operation: dto.walletType.toUpperCase(),
+        type: dto.amount > 0 ? SIM_TRANSACTION_TYPE.IN : SIM_TRANSACTION_TYPE.OUT,
+        note: `Group: ${chat.title}, By: ${username}`,
+      },
+    });
+    await tx.sim.update({ where: { id: sim.id }, data: updatePayload });
+
     return { transactionId: transaction.id, ...chat };
   });
 };
@@ -161,15 +173,15 @@ export const undoBalance = async (
     where: { telegramChatId },
     select: {
       title: true,
-      devices: { include: { sims: { orderBy: { simNo: "asc" } } } },
+      chatDevices: { include: { device: { include: { sims: { orderBy: { simNo: "asc" } } } } } },
     },
   });
 
   if (!chat) throw new Error("Chat not found", { cause: "NOT_FOUND" });
-  if (!chat.devices.length)
+  if (!chat.chatDevices.length)
     throw new Error("No devices found for this chat", { cause: "NOT_FOUND" });
 
-  const device = chat.devices.find((d) => d.deviceNo === dto.deviceNo);
+  const device = chat.chatDevices.find((cd) => cd.device.deviceNo === dto.deviceNo)?.device;
   if (!device) throw new Error("Device not found for this chat", { cause: "NOT_FOUND" });
 
   const sim = device.sims.find((s) => s.simNo === dto.simNo);
@@ -177,8 +189,6 @@ export const undoBalance = async (
 
   if (dto.walletType === "bk") sim.bkLimit += dto.amount;
   else sim.ngLimit += dto.amount;
-
-  chat.devices = device ? [device] : [];
 
   const updatePayload: Prisma.SimUncheckedUpdateInput =
     dto.walletType === "bk"
@@ -201,19 +211,16 @@ export const removeDeviceFromChat = async (telegramChatId: string, deviceNo: num
     where: { telegramChatId },
     select: {
       id: true,
-      devices: {
-        where: { deviceNo },
-        include: { sims: true },
-      },
+      chatDevices: { include: { device: true } },
     },
   });
 
   if (!chat) throw new Error("Chat not found", { cause: "NOT_FOUND" });
 
-  const device = chat.devices.find((d) => d.deviceNo === deviceNo);
-  if (!device) throw new Error("Device not found for this chat", { cause: "NOT_FOUND" });
+  const chatDevice = chat.chatDevices.find((cd) => cd.device.deviceNo === deviceNo);
+  if (!chatDevice) throw new Error("Device not found for this chat", { cause: "NOT_FOUND" });
 
-  await prisma.device.delete({ where: { id: device.id } });
+  await prisma.chatDevice.delete({ where: { id: chatDevice.id } });
 
   return true;
 };
