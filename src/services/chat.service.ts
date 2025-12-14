@@ -9,7 +9,10 @@ export const createChatWithDeviceSims = async (dto: ChatDto) => {
     where: { telegramChatId },
     select: { id: true, title: true, chatDevices: true },
   });
-  const existingDevice = await prisma.device.findUnique({ where: { deviceNo } });
+  const existingDevice = await prisma.device.findUnique({
+    where: { deviceNo },
+    select: { id: true, deviceNo: true, sims: true },
+  });
 
   return await prisma.$transaction(async (tx) => {
     if (existingChat) {
@@ -21,6 +24,13 @@ export const createChatWithDeviceSims = async (dto: ChatDto) => {
             data: { chatId: existingChat.id, deviceId: existingDevice.id },
           });
         }
+        // Unlink device sims that are not in the new sims list
+        const simsMap = new Map(sims.map((s) => [s.phone, s.simNo]));
+        const simsToUnlink = existingDevice.sims.filter((s) => !simsMap.has(s.phone));
+        for (const sim of simsToUnlink) {
+          await tx.sim.update({ where: { id: sim.id }, data: { deviceId: null } });
+        }
+
         // Device already linked to chat, just update sims and title if needed
         for (const sim of sims) {
           await tx.sim.upsert({
@@ -54,18 +64,41 @@ export const createChatWithDeviceSims = async (dto: ChatDto) => {
       }
     } else {
       const chat = await tx.chat.create({ data: { telegramChatId, title } });
-      const device = await tx.device.create({ data: { deviceNo } });
-      // Link new device to new chat
-      await tx.chatDevice.create({ data: { chatId: chat.id, deviceId: device.id } });
-
-      for (const sim of sims) {
-        await tx.sim.upsert({
-          where: { phone: sim.phone },
-          update: { ...sim, deviceId: device.id },
-          create: { ...sim, deviceId: device.id },
+      if (existingDevice) {
+        // Link existing device to new chat
+        await tx.chatDevice.create({
+          data: { chatId: chat.id, deviceId: existingDevice.id },
         });
+
+        // unlink device sims that are not in the new sims list
+        const simsMap = new Map(sims.map((s) => [s.phone, s.simNo]));
+        const simsToUnlink = existingDevice.sims.filter((s) => !simsMap.has(s.phone));
+        for (const sim of simsToUnlink) {
+          await tx.sim.update({ where: { id: sim.id }, data: { deviceId: null } });
+        }
+
+        for (const sim of sims) {
+          await tx.sim.upsert({
+            where: { phone: sim.phone },
+            update: { ...sim, deviceId: existingDevice.id },
+            create: { ...sim, deviceId: existingDevice.id },
+          });
+        }
+        return true;
+      } else {
+        const device = await tx.device.create({ data: { deviceNo } });
+        // Link new device to new chat
+        await tx.chatDevice.create({ data: { chatId: chat.id, deviceId: device.id } });
+
+        for (const sim of sims) {
+          await tx.sim.upsert({
+            where: { phone: sim.phone },
+            update: { ...sim, deviceId: device.id },
+            create: { ...sim, deviceId: device.id },
+          });
+        }
+        return true;
       }
-      return true;
     }
   });
 };
